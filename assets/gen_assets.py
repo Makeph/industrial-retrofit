@@ -358,9 +358,99 @@ def dashboard_video():
     print("wrote retrofit_dashboard_tiktok.mp4")
 
 
+def dashboard_video_16x9():
+    """Version paysage 1920x1080 pour les cartes projet Malt."""
+    LW, LH = 1920, 1080
+    recs = collect_stream(N_FRAMES * STEPS_PER_FRAME)
+    status_col = {"idle": GRAY, "running": GREEN, "fault": RED}
+    import imageio.v2 as imageio
+    w = imageio.get_writer(VID / "retrofit_dashboard_16x9.mp4", fps=FPS, codec="libx264",
+                           quality=8, macro_block_size=1, ffmpeg_log_level="error")
+    win = 110
+    f_big = bold(120)
+    for f in range(N_FRAMES):
+        idx = min(len(recs) - 1, f * STEPS_PER_FRAME)
+        rec = recs[idx]
+        img = Image.new("RGB", (LW, LH), BG)
+        d = ImageDraw.Draw(img)
+        d.rectangle([0, 0, 10, LH], fill=CYAN)
+
+        # header
+        d.text((48, 44), "$ python -m retrofit run", font=mono(28), fill=CYAN)
+        d.text((46, 84), "RÉTROFIT", font=bold(54), fill=WHITE)
+        d.text((340, 98), "CNC-4 · 1996", font=mono(30), fill=GRAY)
+        sc = status_col[rec["status"]]
+        pill(d, LW - 280, 92, rec["status"].upper(), mono(30), sc, bg=lerp(BG, sc, 0.12))
+
+        # ---- colonne gauche : tuiles + OEE + A/P/Q ----
+        tw, th, gap = 270, 150, 24
+        tx, ty = 48, 200
+        tile(d, tx, ty, tw, th, "BROCHE", f"{rec['spindle_rpm']}", "rpm", WHITE)
+        tcol = AMBER if rec["temperature_c"] > 55 else WHITE
+        tile(d, tx + (tw + gap), ty, tw, th, "TEMP", f"{rec['temperature_c']:.0f}", "°C", tcol)
+        vcol = RED if rec["maintenance_alarm"] else (AMBER if rec["vibration_mm_s"] > 1.8 else CYAN)
+        tile(d, tx + 2 * (tw + gap), ty, tw, th, "VIBRATION",
+             f"{rec['vibration_mm_s']:.2f}", "mm/s", vcol)
+
+        # anneau OEE
+        cx, cy, rr = 300, 660, 175
+        oee = rec["oee"]
+        oc = GREEN if oee >= 0.75 else (AMBER if oee >= 0.5 else RED)
+        ring(d, cx, cy, rr, oee, oc, width=32)
+        ot = f"{oee*100:.0f}%"
+        d.text((cx - d.textlength(ot, font=f_big) / 2, cy - 90), ot, font=f_big, fill=oc)
+        d.text((cx - d.textlength("OEE", font=mono(34)) / 2, cy + 48), "OEE", font=mono(34), fill=GRAY)
+
+        bx0 = 560
+        for j, (lab, val, col) in enumerate([
+                ("Disponibilité", rec["availability"], BLUE),
+                ("Performance", rec["performance"], CYAN),
+                ("Qualité", rec["quality"], GREEN)]):
+            yy = 560 + j * 76
+            d.text((bx0, yy), lab, font=mono(28), fill=GRAY)
+            d.rounded_rectangle([bx0, yy + 34, bx0 + 330, yy + 60], radius=13, fill=PANEL2)
+            d.rounded_rectangle([bx0, yy + 34, bx0 + int(330 * val), yy + 60], radius=13, fill=col)
+            d.text((bx0 + 344, yy + 30), f"{val*100:.0f}%", font=monob(28), fill=WHITE)
+
+        # ---- colonne droite : graphe vibration ----
+        gx, gy, gw, gh = 990, 200, LW - 48 - 990, 560
+        d.rounded_rectangle([gx, gy, gx + gw, gy + gh], radius=16, fill=PANEL, outline=BORDER, width=1)
+        d.text((gx + 22, gy + 16), "vibration mm/s — fenêtre glissante", font=mono(28), fill=GRAY)
+        seg = recs[max(0, idx - win):idx + 1]
+        vmax, pad = 4.0, 60
+        ptop, pbot = gy + 70, gy + gh - 36
+        ay = pbot - (2.4 / vmax) * (pbot - ptop)
+        for xx in range(gx + pad, gx + gw - 24, 26):
+            d.line([(xx, ay), (xx + 13, ay)], fill=AMBER, width=2)
+        d.text((gx + gw - 150, ay - 36), "seuil", font=mono(26), fill=AMBER)
+        if len(seg) > 1:
+            def px(i): return gx + pad + i / (len(seg) - 1) * (gw - pad - 36)
+            def py(v): return pbot - min(v, vmax) / vmax * (pbot - ptop)
+            d.line([(px(i), py(s["vibration_mm_s"])) for i, s in enumerate(seg)], fill=CYAN, width=3, joint="curve")
+            d.line([(px(i), py(s["vib_ewma"])) for i, s in enumerate(seg)], fill=WHITE, width=3, joint="curve")
+            for i, s in enumerate(seg):
+                if s["anomaly"]:
+                    x0, y0 = px(i), py(s["vibration_mm_s"])
+                    d.ellipse([x0 - 7, y0 - 7, x0 + 7, y0 + 7], fill=RED)
+        if rec["maintenance_alarm"]:
+            d.rounded_rectangle([gx, gy + gh + 16, gx + gw, gy + gh + 90], radius=12, fill=lerp(BG, RED, 0.18))
+            blink = RED if (f // 4) % 2 == 0 else AMBER
+            d.text((gx + 24, gy + gh + 34),
+                   "[!] MAINTENANCE PRÉDICTIVE — usure roulement", font=bold(28), fill=blink)
+
+        # footer
+        d.text((48, LH - 60), "industrial-retrofit  ·  github.com/Makeph", font=mono(28), fill=GRAY)
+        parts_txt = f"{rec['good_parts']} ok / {rec['reject_parts']} rej"
+        d.text((LW - 48 - d.textlength(parts_txt, font=mono(28)), LH - 60), parts_txt, font=mono(28), fill=GRAY)
+        w.append_data(np.asarray(img))
+    w.close()
+    print("wrote retrofit_dashboard_16x9.mp4")
+
+
 if __name__ == "__main__":
     cover()
     cards()
     banner()
     dashboard_video()
+    dashboard_video_16x9()
     print("DONE")
