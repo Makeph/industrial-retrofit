@@ -9,6 +9,12 @@ Une machine industrielle de 1995 ne parle que des registres 16 bits : pas d'unit
 de contexte, aucune remontée réseau. Ce projet est la **couche de rétrofit** qui transforme
 ce flux brut en télémétrie exploitable — sans toucher à l'automate, sans remplacer la machine.
 
+> **Statut.** Validé de bout en bout contre le **simulateur Modbus fourni**
+> (`machine_sim.py`) — pas encore éprouvé sur un automate physique. Le bridge lit
+> n'importe quel client exposant `read_holding_registers(address, count)`, donc le
+> brancher sur un vrai `pymodbus` est un changement immédiat (voir plus bas) ; ce
+> chemin terrain reste non testé sur matériel.
+
 ```
   ┌────────────┐   Modbus      ┌──────────────────┐   JSON       ┌────────────┐
   │  Machine    │  registres    │  RetrofitBridge   │  télémétrie  │  MQTT /     │
