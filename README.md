@@ -111,3 +111,26 @@ Python 3.9+ · **client & serveur Modbus-TCP en pur stdlib** (pas de dépendance
 
 ---
 MIT · un rétrofit industriel réel, honnête et testable — vrai protocole, device logiciel fourni.
+
+---
+
+<!-- hiddengrid-stack -->
+
+## Une brique du stack edge HiddenGrid
+
+Huit petits dépôts, une seule chaîne : **contrôle → transport → hub → supervision**.
+Chacun tient debout seul et tourne hors ligne ; ensemble ils forment un stack
+local-first où aucun compte cloud n'intervient.
+
+| | Dépôt | Ce que ça fait |
+|---|---|---|
+| Contrôle  | [greenhouse](https://github.com/Makeph/greenhouse) | Contrôleur de serre ESP32/MicroPython — éclairage, aération, chauffe, irrigation par impulsions. La sécurité est dans le firmware. |
+| Contrôle  | [coopilot](https://github.com/Makeph/coopilot) | Contrôleur de poulailler ESP32/MicroPython — porte autonome avec anti-pincement, surintensité et timeout. |
+| Transport  | [gorilla-tsc](https://github.com/Makeph/gorilla-tsc) | Compression Gorilla de séries temporelles, sans perte — le codec de stockage du lien edge→hub. |
+| Hub  | [plexus](https://github.com/Makeph/plexus) | Ingest MQTT → stockage compressé → détection de dérive et de capteur figé → un dashboard. Stdlib only. |
+| Produit  | [serra](https://github.com/Makeph/serra) | Supervision multi-site pour serres et aquaponie, bâtie sur plexus. |
+| Industrie → | **industrial-retrofit** | Vrai Modbus-TCP sur un PLC legacy → télémétrie propre, anomalies, OEE en direct. |
+| Industrie  | [line-twin](https://github.com/Makeph/line-twin) | Temps de cycle mesurés → le goulot → le ROI de sa correction. |
+| Industrie  | [kiln-retrofit](https://github.com/Makeph/kiln-retrofit) | Thermocouple Type-K → cuisson PID rampe/palier → heatwork et cônes pyrométriques. |
+
+Vous êtes ici : **industrial-retrofit**.
