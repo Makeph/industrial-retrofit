@@ -20,6 +20,7 @@ Register map (holding registers, 16-bit unsigned):
 from __future__ import annotations
 
 import random
+import threading
 from dataclasses import dataclass, field
 
 # Register addresses (the only contract the legacy PLC gives you).
@@ -119,3 +120,21 @@ class LegacyMachine:
         if address < 0 or address + count > N_REGISTERS:
             raise IndexError(f"register window {address}..{address + count} out of range")
         return regs[address:address + count]
+
+
+class LiveDevice:
+    """Wraps a :class:`LegacyMachine` as a live Modbus source: each register read
+    advances the simulation one tick. This is what a `ModbusServer` serves, turning
+    the offline simulator into a real network device a Modbus client can poll.
+    Thread-safe, since a threaded server may read from several connections.
+    """
+
+    def __init__(self, machine: "LegacyMachine", dt_s: float = 1.0) -> None:
+        self._machine = machine
+        self._dt = dt_s
+        self._lock = threading.Lock()
+
+    def read_holding_registers(self, address: int, count: int) -> list[int]:
+        with self._lock:
+            self._machine.step(self._dt)
+            return self._machine.read_holding_registers(address, count)

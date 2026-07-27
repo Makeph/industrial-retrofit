@@ -11,11 +11,13 @@ Public API:
 """
 from .anomaly import EwmaTrend, RollingZScore
 from .bridge import RetrofitBridge, decode
-from .machine_sim import LegacyMachine
+from .machine_sim import LegacyMachine, LiveDevice
+from .modbus import ModbusError, ModbusServer, ModbusTcpClient
 from .oee import OeeAccumulator, oee
 
 __all__ = [
-    "LegacyMachine", "RetrofitBridge", "decode",
+    "LegacyMachine", "LiveDevice", "RetrofitBridge", "decode",
+    "ModbusTcpClient", "ModbusServer", "ModbusError",
     "RollingZScore", "EwmaTrend", "OeeAccumulator", "oee",
 ]
 __version__ = "0.1.0"

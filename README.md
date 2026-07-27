@@ -9,11 +9,14 @@ Une machine industrielle de 1995 ne parle que des registres 16 bits : pas d'unit
 de contexte, aucune remontée réseau. Ce projet est la **couche de rétrofit** qui transforme
 ce flux brut en télémétrie exploitable — sans toucher à l'automate, sans remplacer la machine.
 
-> **Statut.** Validé de bout en bout contre le **simulateur Modbus fourni**
-> (`machine_sim.py`) — pas encore éprouvé sur un automate physique. Le bridge lit
-> n'importe quel client exposant `read_holding_registers(address, count)`, donc le
-> brancher sur un vrai `pymodbus` est un changement immédiat (voir plus bas) ; ce
-> chemin terrain reste non testé sur matériel.
+> **C'est un vrai outil Modbus.** Le bridge parle le **protocole Modbus-TCP réel**
+> (trame MBAP + fonction 3) via [`modbus.py`](src/retrofit/modbus.py) — pur stdlib,
+> sans `pymodbus`. Pointez `--host` sur n'importe quel équipement Modbus-TCP (PLC,
+> passerelle, SCADA) et rien d'autre ne change. Le repo embarque aussi un **device
+> logiciel** (`retrofit serve`) qui parle le même protocole, pour développer et tester
+> sans automate sous la main — comme on développe tout outillage Modbus. Les valeurs
+> des registres du device sont synthétiques ; le protocole et l'outil, eux, sont réels
+> (test d'intégration bout-en-bout sur une vraie socket).
 
 ```
   ┌────────────┐   Modbus      ┌──────────────────┐   JSON       ┌────────────┐
@@ -31,23 +34,33 @@ ce flux brut en télémétrie exploitable — sans toucher à l'automate, sans r
   passerelle edge) : z-score glissant pour les pics, EWMA pour la dérive lente d'usure de
   roulement → **alarme avant la panne**.
 - **OEE temps réel** — Disponibilité × Performance × Qualité, accumulé sur le poste.
-- **Pilote neutre** — le bridge lit n'importe quel client exposant
-  `read_holding_registers(address, count)` : le simulateur fourni **ou** un vrai
-  `pymodbus.ModbusTcpClient`. Le code de décodage ne change pas.
+- **Vrai Modbus-TCP, zéro dépendance** — client *et* serveur Modbus-TCP en pur
+  stdlib (`modbus.py`). Le bridge lit n'importe quel client
+  `read_holding_registers(address, count)` : notre client réseau, un
+  `pymodbus.ModbusTcpClient`, ou le device logiciel fourni. Le décodage ne change pas.
 
 ## Démarrage rapide
 
 ```bash
 pip install -e .
-python -m retrofit run --ticks 400 --seed 5
+python -m retrofit run --ticks 400 --seed 5     # bundled device, over real Modbus-TCP
 ```
 
 ```
+# polling Modbus-TCP device at 127.0.0.1:53017 (unit 1)
 t=   222s    fault  rpm= 1819  T= 56.8C  vib=2.45mm/s  OEE= 69.1% !ANOMALY
 ...
 -- shift summary --------------------------------
 availability  70.2%   performance 100.0%   quality  96.4%
 OEE           67.8%   parts 271 good / 10 reject
+```
+
+Split the device and the bridge across two processes, or poll a real PLC:
+
+```bash
+python -m retrofit serve --port 5020                  # expose the software device
+python -m retrofit run --host 127.0.0.1 --port 5020   # (another shell) the bridge polls it
+python -m retrofit run --host 192.168.0.10            # …or a real PLC / gateway
 ```
 
 En Python :
@@ -66,10 +79,9 @@ for rec in bridge.stream(ticks=600, machine=machine):
 ### Brancher un vrai automate
 
 ```python
-from pymodbus.client import ModbusTcpClient
-from retrofit import RetrofitBridge
+from retrofit import ModbusTcpClient, RetrofitBridge
 
-client = ModbusTcpClient("192.168.0.10", port=502)   # même interface read_holding_registers
+client = ModbusTcpClient("192.168.0.10", port=502)   # notre client stdlib (pymodbus marche aussi)
 bridge = RetrofitBridge(client=client)
 while True:
     print(bridge.poll())
@@ -79,22 +91,23 @@ while True:
 
 | Module | Rôle |
 |--------|------|
-| `machine_sim.py` | Simule la machine legacy + sa table de registres Modbus |
+| `modbus.py` | **Vrai Modbus-TCP** en pur stdlib : `ModbusTcpClient` (master) + `ModbusServer` (device logiciel) |
+| `machine_sim.py` | `LegacyMachine` (modèle de machine) + `LiveDevice` (source servie en Modbus) |
 | `bridge.py` | Le rétrofit : lecture → décodage → anomalie → OEE → record JSON |
 | `anomaly.py` | `RollingZScore` (pics) + `EwmaTrend` (dérive d'usure), pur stdlib |
 | `oee.py` | Disponibilité / Performance / Qualité / OEE + accumulateur poste |
-| `cli.py` | `python -m retrofit run` |
+| `cli.py` | `retrofit run` (bridge) · `retrofit serve` (device) |
 
 ## Tests
 
 ```bash
-pytest -q          # 9 passed
+pytest -q          # 13 passed — dont l'aller-retour Modbus client↔serveur sur socket réelle
 ```
 
 ## Stack
 
-Python 3.9+ · zéro dépendance pour le cœur · `pymodbus` optionnel pour le terrain ·
-`pytest` · assets visuels via Pillow/numpy/imageio.
+Python 3.9+ · **client & serveur Modbus-TCP en pur stdlib** (pas de dépendance ;
+`pymodbus` supporté mais non requis) · `pytest` · assets visuels via Pillow/numpy/imageio.
 
 ---
-MIT · construit pour montrer un rétrofit industriel honnête et testable.
+MIT · un rétrofit industriel réel, honnête et testable — vrai protocole, device logiciel fourni.

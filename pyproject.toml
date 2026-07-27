@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "industrial-retrofit"
-version = "0.1.0"
-description = "Give a legacy machine a modern data voice: Modbus registers -> clean telemetry, predictive-maintenance anomaly detection and live OEE."
+version = "0.2.0"
+description = "Give a legacy machine a modern data voice: real Modbus-TCP (pure stdlib) -> clean telemetry, predictive-maintenance anomalies and live OEE. Ships a software device."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
